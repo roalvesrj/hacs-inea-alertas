@@ -1,5 +1,5 @@
 {
-  "domain": "inea_alertas",
+  "domain": "inea_alertas_cheias",
   "name": "INEA Alertas de Cheias",
   "version": "1.0.0",
   "documentation": "https://github.com/roalvesrj/hacs-inea-alertas",
