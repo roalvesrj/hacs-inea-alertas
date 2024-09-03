@@ -1,0 +1,15 @@
+{
+  "domain": "inea_alertas",
+  "name": "INEA Alertas de Cheias",
+  "version": "1.0.0",
+  "documentation": "https://github.com/roalvesrj/hacs-inea-alertas",
+  "dependencies": [],
+  "codeowners": [
+    "@roalvesrj"
+  ],
+  "requirements": [
+    "beautifulsoup4==4.9.3",
+    "requests==2.25.1"
+  ],
+  "iot_class": "cloud_polling"
+}
