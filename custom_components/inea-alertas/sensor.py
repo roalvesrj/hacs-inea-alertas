@@ -1,56 +1,66 @@
-import logging
 import requests
 from bs4 import BeautifulSoup
-from datetime import timedelta
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+import logging
 
 _LOGGER = logging.getLogger(__name__)
 
 def fetch_station_data():
     url = "http://alertadecheias.inea.rj.gov.br/dados/piabanha.php"
-    response = requests.get(url)
+    
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        _LOGGER.error(f"Erro ao acessar a URL: {e}")
+        return []
+    
     soup = BeautifulSoup(response.text, 'html.parser')
 
+    _LOGGER.info("HTML carregado com sucesso.")
+    
     stations = []
-    for row in soup.find_all('tr'):
+    rows = soup.find_all('tr')
+    
+    _LOGGER.info(f"Número de linhas encontradas na tabela: {len(rows)}")
+    
+    for i, row in enumerate(rows):
+        if 'fltrow' in row.get('class', []):
+            continue
+
         cells = row.find_all('td')
-        if len(cells) == 6:
+        if len(cells) >= 6:
+            img_tag = cells[3].find('img')
+            # Mapeando o src da imagem para um status textual
+            if img_tag and 'src' in img_tag.attrs:
+                img_src = img_tag['src']
+                if 'estavel' in img_src:
+                    status_rio = 'Estável'
+                elif 'subindo' in img_src:
+                    status_rio = 'Subindo'
+                elif 'descendo' in img_src:
+                    status_rio = 'Descendo'
+                else:
+                    status_rio = 'Desconhecido'
+            else:
+                status_rio = 'N/A'
+            
             station = {
-                "name": cells[0].text.strip(),
-                "status_river": cells[1].find('img')['alt'],  # Capturando o texto da imagem
-                "last_reading": cells[2].text.strip(),
-                "monitoring_status": cells[3].text.strip(),
-                "rain_1h": cells[4].text.strip(),
-                "rain_24h": cells[5].text.strip()
+                "municipio": cells[0].text.strip(),
+                "curso_agua": cells[1].text.strip(),
+                "nome_estacao": cells[2].text.strip(),
+                "status_rio": status_rio,
+                "ultima_leitura": cells[4].text.strip(),
+                "status_monitoramento": cells[5].text.strip(),
+                "chuva_ultimo": cells[6].text.strip() if len(cells) > 6 else 'N/A',
+                "chuva_1h": cells[7].text.strip() if len(cells) > 7 else 'N/A',
+                "chuva_24h": cells[9].text.strip() if len(cells) > 9 else 'N/A',
+                "nivel_rio_ultimo": cells[12].get_text(strip=True) if len(cells) > 12 else 'N/A',
+                "nivel_rio_45min": cells[15].get_text(strip=True) if len(cells) > 15 else 'N/A'
             }
-            _LOGGER.debug(f"Fetched data for station: {station}")
+            _LOGGER.info(f"Dados da estação encontrados: {station}")
             stations.append(station)
     
     if not stations:
-        _LOGGER.warning("No stations data found on INEA page.")
+        _LOGGER.warning("Nenhuma estação foi encontrada.")
     
     return stations
-
-async def async_setup_entry(hass, config_entry, async_add_entities):
-    _LOGGER.info("Setting up INEA Alertas de Cheias integration...")
-    
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="INEA data",
-        update_method=fetch_station_data,
-        update_interval=timedelta(minutes=30),
-    )
-    
-    await coordinator.async_config_entry_first_refresh()
-    
-    if coordinator.data is None:
-        _LOGGER.warning("No data fetched from INEA, no sensors will be added.")
-        return
-
-    sensors = []
-    for station in coordinator.data:
-        sensors.append(INEASensor(coordinator, station))
-        _LOGGER.info(f"Sensor added for station: {station['name']}")
-    
-    async_add_entities(sensors)
